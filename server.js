@@ -1,93 +1,189 @@
 import express from "express";
+import { db } from "./db.js";
 
 const app = express();
 app.set("json spaces", 2);
 app.use(express.json());
 
-let productos = [
-    { id: 1, nombre: "Teclado", precio: 80000, stock: 10 },
-    { id: 2, nombre: "Mouse", precio: 35000, stock: 25 }
-];
-let siguienteId = 3;
+// GET /productos  (opcional: ?max=50000)
+app.get("/productos", async function (req, res) {
+    try {
+        const max = req.query.max;
 
-app.get("/productos", (req, res) => {
-    const { max } = req.query;
-    if (max === undefined) {
-        return res.status(200).json(productos);
+        if (max === undefined) {
+            const resultado = await db.query("SELECT * FROM productos");
+            return res.status(200).json(resultado[0]);
+        }
+
+        if (isNaN(Number(max))) {
+            return res.status(400).json({ error: "max debe ser un número" });
+        }
+
+        const resultado = await db.query(
+            "SELECT * FROM productos WHERE precio <= ?",
+            [Number(max)]
+        );
+        res.status(200).json(resultado[0]);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    if (isNaN(Number(max))) {
-        return res.status(400).json({ error: "max debe ser un número" });
-    }
-    const filtrados = productos.filter((p) => p.precio <= Number(max));
-    res.status(200).json(filtrados);
 });
 
-app.get("/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-    const i = productos.findIndex((p) => p.id === id);
-    if (i === -1) {
-        return res.status(404).json({ error: "No existe" });
+// GET /productos/:id
+app.get("/productos/:id", async function (req, res) {
+    try {
+        const id = Number(req.params.id);
+
+        const resultado = await db.query(
+            "SELECT * FROM productos WHERE id = ?",
+            [id]
+        );
+        const filas = resultado[0];
+
+        if (filas.length === 0) {
+            return res.status(404).json({ error: "No existe" });
+        }
+        res.status(200).json(filas[0]);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    res.status(200).json(productos[i]);
 });
 
-app.post("/productos", (req, res) => {
-    const { nombre, precio } = req.body;
-    if (!nombre || typeof precio !== "number" || precio < 0) {
-        return res.status(400).json({ error: "Faltan datos o no son válidos" });
+// POST /productos
+app.post("/productos", async function (req, res) {
+    try {
+        const nombre = req.body.nombre;
+        const precio = req.body.precio;
+
+        if (!nombre || typeof precio !== "number" || precio < 0) {
+            return res.status(400).json({ error: "Faltan datos o no son válidos" });
+        }
+
+        const resultado = await db.query(
+            "INSERT INTO productos (nombre, precio, stock) VALUES (?, ?, 0)",
+            [nombre, precio]
+        );
+
+        const nuevo = {
+            id: resultado[0].insertId,
+            nombre: nombre,
+            precio: precio,
+            stock: 0
+        };
+        res.status(201).json(nuevo);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    const nuevo = { id: siguienteId++, nombre, precio, stock: 0 };
-    productos.push(nuevo);
-    res.status(201).json(nuevo);
 });
 
-app.put("/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-    const i = productos.findIndex((p) => p.id === id);
-    if (i === -1) {
-        return res.status(404).json({ error: "No existe" });
+// PUT /productos/:id  (reemplaza todo el producto)
+app.put("/productos/:id", async function (req, res) {
+    try {
+        const id = Number(req.params.id);
+        const nombre = req.body.nombre;
+        const precio = req.body.precio;
+        const stock = req.body.stock;
+
+        const existe = await db.query(
+            "SELECT * FROM productos WHERE id = ?",
+            [id]
+        );
+        if (existe[0].length === 0) {
+            return res.status(404).json({ error: "No existe" });
+        }
+
+        if (!nombre || typeof precio !== "number" || precio < 0 || typeof stock !== "number" || stock < 0) {
+            return res.status(400).json({ error: "Faltan datos o no son válidos" });
+        }
+
+        await db.query(
+            "UPDATE productos SET nombre = ?, precio = ?, stock = ? WHERE id = ?",
+            [nombre, precio, stock, id]
+        );
+
+        res.status(200).json({ id: id, nombre: nombre, precio: precio, stock: stock });
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    const { nombre, precio, stock } = req.body;
-    if (!nombre || typeof precio !== "number" || precio < 0 || typeof stock !== "number" || stock < 0) {
-        return res.status(400).json({ error: "Faltan datos o no son válidos" });
-    }
-    productos[i] = { id, nombre, precio, stock };
-    res.status(200).json(productos[i]);
 });
 
-app.patch("/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-    const i = productos.findIndex((p) => p.id === id);
-    if (i === -1) {
-        return res.status(404).json({ error: "No existe" });
+// PATCH /productos/:id  (cambia solo los campos enviados)
+app.patch("/productos/:id", async function (req, res) {
+    try {
+        const id = Number(req.params.id);
+        const nombre = req.body.nombre;
+        const precio = req.body.precio;
+        const stock = req.body.stock;
+
+        const existe = await db.query(
+            "SELECT * FROM productos WHERE id = ?",
+            [id]
+        );
+        if (existe[0].length === 0) {
+            return res.status(404).json({ error: "No existe" });
+        }
+
+        if (nombre === undefined && precio === undefined && stock === undefined) {
+            return res.status(400).json({ error: "No enviaste ningún campo" });
+        }
+        if (nombre !== undefined && !nombre) {
+            return res.status(400).json({ error: "Nombre no válido" });
+        }
+        if (precio !== undefined && (typeof precio !== "number" || precio < 0)) {
+            return res.status(400).json({ error: "Precio no válido" });
+        }
+        if (stock !== undefined && (typeof stock !== "number" || stock < 0)) {
+            return res.status(400).json({ error: "Stock no válido" });
+        }
+
+        // Partimos del producto que ya existe y cambiamos lo que llegó
+        const producto = existe[0][0];
+        if (nombre !== undefined) {
+            producto.nombre = nombre;
+        }
+        if (precio !== undefined) {
+            producto.precio = precio;
+        }
+        if (stock !== undefined) {
+            producto.stock = stock;
+        }
+
+        await db.query(
+            "UPDATE productos SET nombre = ?, precio = ?, stock = ? WHERE id = ?",
+            [producto.nombre, producto.precio, producto.stock, id]
+        );
+
+        res.status(200).json(producto);
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    const { nombre, precio, stock } = req.body;
-    if (nombre === undefined && precio === undefined && stock === undefined) {
-        return res.status(400).json({ error: "No enviaste ningún campo" });
-    }
-    if (nombre !== undefined && !nombre) {
-        return res.status(400).json({ error: "Nombre no válido" });
-    }
-    if (precio !== undefined && (typeof precio !== "number" || precio < 0)) {
-        return res.status(400).json({ error: "Precio no válido" });
-    }
-    if (stock !== undefined && (typeof stock !== "number" || stock < 0)) {
-        return res.status(400).json({ error: "Stock no válido" });
-    }
-    if (nombre !== undefined) productos[i].nombre = nombre;
-    if (precio !== undefined) productos[i].precio = precio;
-    if (stock !== undefined) productos[i].stock = stock;
-    res.status(200).json(productos[i]);
 });
 
-app.delete("/productos/:id", (req, res) => {
-    const id = Number(req.params.id);
-    const i = productos.findIndex((p) => p.id === id);
-    if (i === -1) {
-        return res.status(404).json({ error: "No existe" });
+// DELETE /productos/:id
+app.delete("/productos/:id", async function (req, res) {
+    try {
+        const id = Number(req.params.id);
+
+        const resultado = await db.query(
+            "DELETE FROM productos WHERE id = ?",
+            [id]
+        );
+
+        if (resultado[0].affectedRows === 0) {
+            return res.status(404).json({ error: "No existe" });
+        }
+        res.status(204).end();
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({ error: "Error en el servidor" });
     }
-    productos.splice(i, 1);
-    res.status(204).end();
 });
 
-app.listen(3000, () => console.log("Servidor listo"));
+app.listen(3000, function () {
+    console.log("Servidor listo");
+});
