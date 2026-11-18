@@ -1,9 +1,11 @@
 import express from "express";
 import { db } from "./db.js";
+import { rutasAuth, verificarToken, soloAdmin } from "./auth.js";
 
 const app = express();
 app.set("json spaces", 2);
 app.use(express.json());
+app.use(rutasAuth);
 
 // GET /productos  (opcional: ?max=50000)
 app.get("/productos", async function (req, res) {
@@ -52,7 +54,7 @@ app.get("/productos/:id", async function (req, res) {
 });
 
 // POST /productos
-app.post("/productos", async function (req, res) {
+app.post("/productos", verificarToken, async function (req, res) {
     try {
         const nombre = req.body.nombre;
         const precio = req.body.precio;
@@ -80,7 +82,7 @@ app.post("/productos", async function (req, res) {
 });
 
 // PUT /productos/:id  (reemplaza todo el producto)
-app.put("/productos/:id", async function (req, res) {
+app.put("/productos/:id", verificarToken, async function (req, res) {
     try {
         const id = Number(req.params.id);
         const nombre = req.body.nombre;
@@ -112,7 +114,7 @@ app.put("/productos/:id", async function (req, res) {
 });
 
 // PATCH /productos/:id  (cambia solo los campos enviados)
-app.patch("/productos/:id", async function (req, res) {
+app.patch("/productos/:id", verificarToken, async function (req, res) {
     try {
         const id = Number(req.params.id);
         const nombre = req.body.nombre;
@@ -165,7 +167,7 @@ app.patch("/productos/:id", async function (req, res) {
 });
 
 // DELETE /productos/:id
-app.delete("/productos/:id", async function (req, res) {
+app.delete("/productos/:id", verificarToken, soloAdmin, async function (req, res) {
     try {
         const id = Number(req.params.id);
 
