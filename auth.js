@@ -11,8 +11,8 @@ rutasAuth.post("/registro", async function (req, res) {
         const email = req.body.email;
         const password = req.body.password;
 
-        if (!email || !password || password.length < 6) {
-            return res.status(400).json({ error: "Email y clave (mínimo 6 caracteres) son obligatorios" });
+        if (!email || !email.includes("@") || !password || password.length < 6) {
+            return res.status(400).json({ error: "Email válido y clave (mínimo 6 caracteres) son obligatorios" });
         }
 
         const hash = await bcrypt.hash(password, 10);
@@ -70,32 +70,3 @@ rutasAuth.post("/login", async function (req, res) {
         res.status(500).json({ error: "Error en el servidor" });
     }
 });
-
-// Middleware: revisa que la petición traiga un token válido
-export function verificarToken(req, res, next) {
-    const cabecera = req.headers.authorization;
-
-    if (!cabecera) {
-        return res.status(401).json({ error: "Falta el token" });
-    }
-
-    // La cabecera llega como: "Bearer eltoken"
-    const partes = cabecera.split(" ");
-    const token = partes[1];
-
-    try {
-        const datos = jwt.verify(token, process.env.JWT_SECRET);
-        req.usuario = datos;
-        next();
-    } catch (error) {
-        return res.status(401).json({ error: "Token inválido o vencido" });
-    }
-}
-
-// Middleware: deja pasar solo a los administradores
-export function soloAdmin(req, res, next) {
-    if (req.usuario.rol !== "admin") {
-        return res.status(403).json({ error: "No tienes permiso para esto" });
-    }
-    next();
-}

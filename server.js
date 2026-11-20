@@ -1,6 +1,7 @@
 import express from "express";
 import { db } from "./db.js";
-import { rutasAuth, verificarToken, soloAdmin } from "./auth.js";
+import { rutasAuth } from "./auth.js";
+import { verificarToken, soloAdmin } from "./middlewares.js";
 
 const app = express();
 app.set("json spaces", 2);
